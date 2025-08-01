@@ -12,7 +12,7 @@ export default function PDFTextractDemo() {
   const [processor, setProcessor] = useState<string>("");
   const [ocrMethod, setOcrMethod] = useState<'textract' | 'mistral'>('textract');
   const [qaMethod, setQaMethod] = useState<'anthropic' | 'mistral'>('anthropic');
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [, setUploadedFile] = useState<File | null>(null);
   const [answerMethod, setAnswerMethod] = useState<string>("");
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
   const [mistralFileInfo, setMistralFileInfo] = useState<{id: string, signedUrl: string} | null>(null);
@@ -299,9 +299,14 @@ export default function PDFTextractDemo() {
 
         {/* Extracted Text Section */}
         {extractedText && (
-          <div className="mt-6 bg-gray-800 rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-white">Extracted Text</h2>
+          <div className="mt-6 space-y-6">
+            {/* Free Text Section */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center space-x-2">
+                  <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">FREE TEXT</span>
+                  <h2 className="text-xl font-semibold text-white">Extracted Text</h2>
+                </div>
               <button
                 onClick={handleCopyText}
                 className="flex items-center space-x-2 px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg transition-colors duration-200 text-sm"
@@ -328,6 +333,136 @@ export default function PDFTextractDemo() {
               <pre className="text-gray-300 text-sm whitespace-pre-wrap">{extractedText}</pre>
             </div>
           </div>
+
+          {/* Key-Value Pairs Section */}
+          {structuredData?.keyValuePairs && structuredData.keyValuePairs.length > 0 && (
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <span className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">KEY-VALUE PAIRS</span>
+                <h2 className="text-xl font-semibold text-white">Form Data</h2>
+                <span className="text-gray-400 text-sm">({structuredData.keyValuePairs.length} pairs)</span>
+              </div>
+              <div className="bg-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+                {structuredData.keyValuePairs.map((pair, index) => (
+                  <div key={index} className="flex flex-wrap items-start gap-2 p-3 bg-gray-600 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-400 mb-1">Key:</div>
+                      <div className="text-sm text-blue-300 font-medium break-words">{pair.key || 'N/A'}</div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-400 mb-1">Value:</div>
+                      <div className="text-sm text-green-300 break-words">{pair.value || 'N/A'}</div>
+                    </div>
+                    <div className="flex flex-col items-end text-xs text-gray-400">
+                      <div>Page {pair.pageNumber}</div>
+                      <div>{Math.round(pair.confidence)}% conf.</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tables Section */}
+          {structuredData?.tables && structuredData.tables.length > 0 && (
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <span className="bg-purple-600 text-white px-2 py-1 rounded text-xs font-medium">TABLES</span>
+                <h2 className="text-xl font-semibold text-white">Table Data</h2>
+                <span className="text-gray-400 text-sm">({structuredData.tables.length} table{structuredData.tables.length !== 1 ? 's' : ''})</span>
+              </div>
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {structuredData.tables.map((table, tableIndex) => (
+                  <div key={tableIndex} className="bg-gray-700 rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-sm font-medium text-white">Table {tableIndex + 1}</h3>
+                      <div className="text-xs text-gray-400">
+                        Page {table.pageNumber} • {Math.round(table.confidence)}% confidence
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-xs">
+                        <tbody>
+                          {table.rows.map((row, rowIndex) => (
+                            <tr key={rowIndex} className={rowIndex === 0 ? 'bg-gray-600' : 'bg-gray-800'}>
+                              {row.map((cell, cellIndex) => (
+                                <td 
+                                  key={cellIndex} 
+                                  className={`px-2 py-1 border border-gray-500 text-gray-300 ${
+                                    rowIndex === 0 ? 'font-medium text-white' : ''
+                                  }`}
+                                >
+                                  {cell || ''}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Form Fields Section (if different from key-value pairs) */}
+          {structuredData?.formFields && structuredData.formFields.length > 0 && (
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <span className="bg-orange-600 text-white px-2 py-1 rounded text-xs font-medium">FORM FIELDS</span>
+                <h2 className="text-xl font-semibold text-white">Form Fields</h2>
+                <span className="text-gray-400 text-sm">({structuredData.formFields.length} fields)</span>
+              </div>
+              <div className="bg-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+                {structuredData.formFields.map((field, index) => (
+                  <div key={index} className="flex flex-wrap items-start gap-2 p-3 bg-gray-600 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-400 mb-1">Field Name:</div>
+                      <div className="text-sm text-orange-300 font-medium break-words">{field.fieldName || 'N/A'}</div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-400 mb-1">Field Value:</div>
+                      <div className="text-sm text-yellow-300 break-words">{field.fieldValue || 'N/A'}</div>
+                    </div>
+                    <div className="flex flex-col items-end text-xs text-gray-400">
+                      <div>Page {field.pageNumber}</div>
+                      <div>{Math.round(field.confidence)}% conf.</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Data Summary */}
+          {structuredData && (
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <span className="bg-gray-600 text-white px-2 py-1 rounded text-xs font-medium">SUMMARY</span>
+                <h2 className="text-xl font-semibold text-white">Extraction Summary</h2>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div className="bg-gray-700 rounded-lg p-3">
+                  <div className="text-2xl font-bold text-white">{structuredData.totalPages}</div>
+                  <div className="text-xs text-gray-400">Total Pages</div>
+                </div>
+                <div className="bg-gray-700 rounded-lg p-3">
+                  <div className="text-2xl font-bold text-green-400">{structuredData.keyValuePairs?.length || 0}</div>
+                  <div className="text-xs text-gray-400">Key-Value Pairs</div>
+                </div>
+                <div className="bg-gray-700 rounded-lg p-3">
+                  <div className="text-2xl font-bold text-purple-400">{structuredData.tables?.length || 0}</div>
+                  <div className="text-xs text-gray-400">Tables</div>
+                </div>
+                <div className="bg-gray-700 rounded-lg p-3">
+                  <div className="text-2xl font-bold text-orange-400">{structuredData.formFields?.length || 0}</div>
+                  <div className="text-xs text-gray-400">Form Fields</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         )}
 
         {/* Answer Section */}
