@@ -120,7 +120,7 @@ export class MistralOCRService {
 
       // Use Mistral's document Q&A capability with the signed URL
       const chatResponse = await this.client.chat.complete({
-        model: MODELS.MISTRAL.SMALL_LATEST,
+        model: MODELS.MISTRAL.LARGE_LATEST,
         messages: [
           {
             role: "user",

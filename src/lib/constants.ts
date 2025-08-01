@@ -5,7 +5,7 @@ export const MODELS = {
   },
   MISTRAL: {
     OCR_LATEST: 'mistral-ocr-latest',
-    SMALL_LATEST: 'mistral-small-latest',
+    LARGE_LATEST: 'mistral-large-latest',
   }
 } as const;
 
