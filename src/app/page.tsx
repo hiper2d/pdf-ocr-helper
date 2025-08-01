@@ -22,6 +22,7 @@ export default function PDFTextractDemo() {
     tables: Array<{rows: string[][], confidence: number, pageNumber: number}>;
     totalPages: number;
   } | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('text');
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -297,172 +298,211 @@ export default function PDFTextractDemo() {
           </div>
         </div>
 
-        {/* Extracted Text Section */}
+        {/* Extracted Data with Tabs */}
         {extractedText && (
-          <div className="mt-6 space-y-6">
-            {/* Free Text Section */}
-            <div className="bg-gray-800 rounded-lg p-6">
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center space-x-2">
-                  <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">FREE TEXT</span>
-                  <h2 className="text-xl font-semibold text-white">Extracted Text</h2>
-                </div>
+          <div className="mt-6 bg-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-white mb-6">Extracted Document Data</h2>
+            
+            {/* Tab Navigation */}
+            <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-700">
               <button
-                onClick={handleCopyText}
-                className="flex items-center space-x-2 px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg transition-colors duration-200 text-sm"
-                title="Copy to clipboard"
+                onClick={() => setActiveTab('text')}
+                className={`px-4 py-2 rounded-t-lg font-medium transition-colors duration-200 ${
+                  activeTab === 'text'
+                    ? 'bg-blue-600 text-white border-b-2 border-blue-400'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
               >
-                {copySuccess ? (
-                  <>
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <span>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    <span>Copy</span>
-                  </>
-                )}
+                📄 Free Text
               </button>
+              
+              {structuredData?.keyValuePairs && structuredData.keyValuePairs.length > 0 && (
+                <button
+                  onClick={() => setActiveTab('keyvalue')}
+                  className={`px-4 py-2 rounded-t-lg font-medium transition-colors duration-200 ${
+                    activeTab === 'keyvalue'
+                      ? 'bg-green-600 text-white border-b-2 border-green-400'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                  }`}
+                >
+                  🔑 Forms & Key-Value Pairs ({structuredData.keyValuePairs.length})
+                </button>
+              )}
+              
+              {structuredData?.tables && structuredData.tables.length > 0 && (
+                <button
+                  onClick={() => setActiveTab('tables')}
+                  className={`px-4 py-2 rounded-t-lg font-medium transition-colors duration-200 ${
+                    activeTab === 'tables'
+                      ? 'bg-purple-600 text-white border-b-2 border-purple-400'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                  }`}
+                >
+                  📊 Tables ({structuredData.tables.length})
+                </button>
+              )}
+              
+              
+              {structuredData && (
+                <button
+                  onClick={() => setActiveTab('summary')}
+                  className={`px-4 py-2 rounded-t-lg font-medium transition-colors duration-200 ${
+                    activeTab === 'summary'
+                      ? 'bg-gray-600 text-white border-b-2 border-gray-400'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                  }`}
+                >
+                  📈 Summary
+                </button>
+              )}
             </div>
-            <div className="bg-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto">
-              <pre className="text-gray-300 text-sm whitespace-pre-wrap">{extractedText}</pre>
-            </div>
-          </div>
 
-          {/* Key-Value Pairs Section */}
-          {structuredData?.keyValuePairs && structuredData.keyValuePairs.length > 0 && (
-            <div className="bg-gray-800 rounded-lg p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <span className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">KEY-VALUE PAIRS</span>
-                <h2 className="text-xl font-semibold text-white">Form Data</h2>
-                <span className="text-gray-400 text-sm">({structuredData.keyValuePairs.length} pairs)</span>
-              </div>
-              <div className="bg-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
-                {structuredData.keyValuePairs.map((pair, index) => (
-                  <div key={index} className="flex flex-wrap items-start gap-2 p-3 bg-gray-600 rounded-lg">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-gray-400 mb-1">Key:</div>
-                      <div className="text-sm text-blue-300 font-medium break-words">{pair.key || 'N/A'}</div>
+            {/* Tab Content */}
+            <div className="min-h-[400px]">
+              {/* Free Text Tab */}
+              {activeTab === 'text' && (
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-medium text-white">Raw Extracted Text</h3>
+                    <button
+                      onClick={handleCopyText}
+                      className="flex items-center space-x-2 px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg transition-colors duration-200 text-sm"
+                      title="Copy to clipboard"
+                    >
+                      {copySuccess ? (
+                        <>
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="bg-gray-700 rounded-lg p-6 h-96 overflow-y-auto">
+                    <pre className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">{extractedText}</pre>
+                  </div>
+                </div>
+              )}
+
+              {/* Key-Value Pairs Tab */}
+              {activeTab === 'keyvalue' && structuredData?.keyValuePairs && (
+                <div>
+                  <h3 className="text-lg font-medium text-white mb-4">
+                    Forms & Key-Value Pairs ({structuredData.keyValuePairs.length} pairs)
+                  </h3>
+                  <div className="bg-gray-700 rounded-lg p-6 h-96 overflow-y-auto space-y-4">
+                    {structuredData.keyValuePairs.map((pair, index) => (
+                      <div key={index} className="bg-gray-600 rounded-lg p-4 border-l-4 border-green-500">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <div className="text-xs text-gray-400 mb-2 font-medium">KEY</div>
+                            <div className="text-green-300 font-medium text-base break-words">
+                              {pair.key || 'N/A'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-400 mb-2 font-medium">VALUE</div>
+                            <div className="text-blue-300 text-base break-words">
+                              {pair.value || 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-500 text-xs text-gray-400">
+                          <span>Page {pair.pageNumber}</span>
+                          <span>{Math.round(pair.confidence)}% confidence</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tables Tab */}
+              {activeTab === 'tables' && structuredData?.tables && (
+                <div>
+                  <h3 className="text-lg font-medium text-white mb-4">
+                    Tables ({structuredData.tables.length} table{structuredData.tables.length !== 1 ? 's' : ''})
+                  </h3>
+                  <div className="h-96 overflow-y-auto space-y-6">
+                    {structuredData.tables.map((table, tableIndex) => (
+                      <div key={tableIndex} className="bg-gray-700 rounded-lg p-6 border-l-4 border-purple-500">
+                        <div className="flex justify-between items-center mb-4">
+                          <h4 className="text-base font-medium text-white">Table {tableIndex + 1}</h4>
+                          <div className="text-xs text-gray-400">
+                            Page {table.pageNumber} • {Math.round(table.confidence)}% confidence
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-sm border border-gray-600">
+                            <tbody>
+                              {table.rows.map((row, rowIndex) => (
+                                <tr key={rowIndex} className={rowIndex === 0 ? 'bg-gray-600' : 'bg-gray-800'}>
+                                  {row.map((cell, cellIndex) => (
+                                    <td 
+                                      key={cellIndex} 
+                                      className={`px-4 py-3 border border-gray-600 text-gray-300 ${
+                                        rowIndex === 0 ? 'font-semibold text-white bg-gray-600' : ''
+                                      }`}
+                                    >
+                                      {cell || '—'}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+
+              {/* Summary Tab */}
+              {activeTab === 'summary' && structuredData && (
+                <div>
+                  <h3 className="text-lg font-medium text-white mb-6">Extraction Summary</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-gray-700 rounded-lg p-6 text-center border-l-4 border-blue-500">
+                      <div className="text-3xl font-bold text-white mb-2">{structuredData.totalPages}</div>
+                      <div className="text-gray-400 font-medium">Total Pages</div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-gray-400 mb-1">Value:</div>
-                      <div className="text-sm text-green-300 break-words">{pair.value || 'N/A'}</div>
+                    <div className="bg-gray-700 rounded-lg p-6 text-center border-l-4 border-green-500">
+                      <div className="text-3xl font-bold text-green-400 mb-2">{structuredData.keyValuePairs?.length || 0}</div>
+                      <div className="text-gray-400 font-medium">Forms & Key-Value Pairs</div>
                     </div>
-                    <div className="flex flex-col items-end text-xs text-gray-400">
-                      <div>Page {pair.pageNumber}</div>
-                      <div>{Math.round(pair.confidence)}% conf.</div>
+                    <div className="bg-gray-700 rounded-lg p-6 text-center border-l-4 border-purple-500">
+                      <div className="text-3xl font-bold text-purple-400 mb-2">{structuredData.tables?.length || 0}</div>
+                      <div className="text-gray-400 font-medium">Tables</div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Tables Section */}
-          {structuredData?.tables && structuredData.tables.length > 0 && (
-            <div className="bg-gray-800 rounded-lg p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <span className="bg-purple-600 text-white px-2 py-1 rounded text-xs font-medium">TABLES</span>
-                <h2 className="text-xl font-semibold text-white">Table Data</h2>
-                <span className="text-gray-400 text-sm">({structuredData.tables.length} table{structuredData.tables.length !== 1 ? 's' : ''})</span>
-              </div>
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {structuredData.tables.map((table, tableIndex) => (
-                  <div key={tableIndex} className="bg-gray-700 rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-sm font-medium text-white">Table {tableIndex + 1}</h3>
-                      <div className="text-xs text-gray-400">
-                        Page {table.pageNumber} • {Math.round(table.confidence)}% confidence
+                  
+                  <div className="mt-8 bg-gray-700 rounded-lg p-6">
+                    <h4 className="text-base font-medium text-white mb-4">Processing Details</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-400">Processor:</span>
+                        <span className="text-white ml-2">{processor}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Document:</span>
+                        <span className="text-white ml-2">{fileName}</span>
                       </div>
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-xs">
-                        <tbody>
-                          {table.rows.map((row, rowIndex) => (
-                            <tr key={rowIndex} className={rowIndex === 0 ? 'bg-gray-600' : 'bg-gray-800'}>
-                              {row.map((cell, cellIndex) => (
-                                <td 
-                                  key={cellIndex} 
-                                  className={`px-2 py-1 border border-gray-500 text-gray-300 ${
-                                    rowIndex === 0 ? 'font-medium text-white' : ''
-                                  }`}
-                                >
-                                  {cell || ''}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
-          )}
-
-          {/* Form Fields Section (if different from key-value pairs) */}
-          {structuredData?.formFields && structuredData.formFields.length > 0 && (
-            <div className="bg-gray-800 rounded-lg p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <span className="bg-orange-600 text-white px-2 py-1 rounded text-xs font-medium">FORM FIELDS</span>
-                <h2 className="text-xl font-semibold text-white">Form Fields</h2>
-                <span className="text-gray-400 text-sm">({structuredData.formFields.length} fields)</span>
-              </div>
-              <div className="bg-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
-                {structuredData.formFields.map((field, index) => (
-                  <div key={index} className="flex flex-wrap items-start gap-2 p-3 bg-gray-600 rounded-lg">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-gray-400 mb-1">Field Name:</div>
-                      <div className="text-sm text-orange-300 font-medium break-words">{field.fieldName || 'N/A'}</div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-gray-400 mb-1">Field Value:</div>
-                      <div className="text-sm text-yellow-300 break-words">{field.fieldValue || 'N/A'}</div>
-                    </div>
-                    <div className="flex flex-col items-end text-xs text-gray-400">
-                      <div>Page {field.pageNumber}</div>
-                      <div>{Math.round(field.confidence)}% conf.</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Data Summary */}
-          {structuredData && (
-            <div className="bg-gray-800 rounded-lg p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <span className="bg-gray-600 text-white px-2 py-1 rounded text-xs font-medium">SUMMARY</span>
-                <h2 className="text-xl font-semibold text-white">Extraction Summary</h2>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div className="bg-gray-700 rounded-lg p-3">
-                  <div className="text-2xl font-bold text-white">{structuredData.totalPages}</div>
-                  <div className="text-xs text-gray-400">Total Pages</div>
-                </div>
-                <div className="bg-gray-700 rounded-lg p-3">
-                  <div className="text-2xl font-bold text-green-400">{structuredData.keyValuePairs?.length || 0}</div>
-                  <div className="text-xs text-gray-400">Key-Value Pairs</div>
-                </div>
-                <div className="bg-gray-700 rounded-lg p-3">
-                  <div className="text-2xl font-bold text-purple-400">{structuredData.tables?.length || 0}</div>
-                  <div className="text-xs text-gray-400">Tables</div>
-                </div>
-                <div className="bg-gray-700 rounded-lg p-3">
-                  <div className="text-2xl font-bold text-orange-400">{structuredData.formFields?.length || 0}</div>
-                  <div className="text-xs text-gray-400">Form Fields</div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
         )}
 
         {/* Answer Section */}

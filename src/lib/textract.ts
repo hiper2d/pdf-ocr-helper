@@ -456,7 +456,6 @@ export class TextractService {
   private processBlocks(blocks: any[], pageNumber: number): EnhancedTextractResult {
     const text: string[] = [];
     const keyValuePairs: KeyValuePair[] = [];
-    const formFields: FormField[] = [];
     const tables: TableData[] = [];
 
     // Create lookup maps for relationships
@@ -499,35 +498,8 @@ export class TextractService {
       }
     });
 
-    // Extract form fields (similar to key-value pairs but with different structure)
-    blocks.filter(block => block.BlockType === 'KEY_VALUE_SET').forEach(block => {
-      if (block.EntityTypes?.includes('KEY')) {
-        const fieldName = this.getTextFromBlock(block, blockMap);
-        let fieldValue = '';
-        let confidence = block.Confidence || 0;
-
-        if (block.Relationships) {
-          const valueRelation = block.Relationships.find((rel: any) => rel.Type === 'VALUE');
-          if (valueRelation && valueRelation.Ids) {
-            const valueBlockId = valueRelation.Ids[0];
-            const valueBlock = blockMap.get(valueBlockId);
-            if (valueBlock) {
-              fieldValue = this.getTextFromBlock(valueBlock, blockMap);
-              confidence = Math.min(confidence, valueBlock.Confidence || 0);
-            }
-          }
-        }
-
-        if (fieldName) {
-          formFields.push({
-            fieldName,
-            fieldValue,
-            confidence,
-            pageNumber
-          });
-        }
-      }
-    });
+    // Note: formFields and keyValuePairs are the same in AWS Textract
+    // The FORMS feature extracts key-value pairs, so we don't need separate processing
 
     // Extract tables
     blocks.filter(block => block.BlockType === 'TABLE').forEach(tableBlock => {
@@ -544,7 +516,7 @@ export class TextractService {
     return {
       text: text.join('\n'),
       keyValuePairs,
-      formFields,
+      formFields: [], // Empty since it's the same as keyValuePairs
       tables,
       totalPages: pageNumber
     };
