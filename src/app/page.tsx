@@ -10,8 +10,8 @@ export default function PDFTextractDemo() {
   const [isAnswering, setIsAnswering] = useState(false);
   const [fileName, setFileName] = useState<string>("");
   const [processor, setProcessor] = useState<string>("");
-  const [ocrMethod, setOcrMethod] = useState<'textract' | 'mistral'>('textract');
-  const [qaMethod, setQaMethod] = useState<'anthropic' | 'mistral'>('anthropic');
+  const [ocrMethod, setOcrMethod] = useState<'textract' | 'mistral' | 'google'>('textract');
+  const [qaMethod, setQaMethod] = useState<'anthropic' | 'mistral' | 'google'>('anthropic');
   const [, setUploadedFile] = useState<File | null>(null);
   const [answerMethod, setAnswerMethod] = useState<string>("");
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
@@ -20,6 +20,7 @@ export default function PDFTextractDemo() {
     keyValuePairs: Array<{key: string, value: string, confidence: number, pageNumber: number}>;
     formFields: Array<{fieldName: string, fieldValue: string, confidence: number, pageNumber: number}>;
     tables: Array<{rows: string[][], confidence: number, pageNumber: number}>;
+    entities?: Array<{type: string, mentionText: string, confidence: number, pageNumber: number}>; // Google Document AI
     totalPages: number;
   } | null>(null);
   const [activeTab, setActiveTab] = useState<string>('text');
@@ -42,7 +43,8 @@ export default function PDFTextractDemo() {
       formData.append('pdf', file);
 
       // Choose API endpoint based on selected OCR method
-      const endpoint = ocrMethod === 'mistral' ? '/api/extract-text-mistral' : '/api/extract-text-aws';
+      const endpoint = ocrMethod === 'mistral' ? '/api/extract-text-mistral' : 
+                      ocrMethod === 'google' ? '/api/extract-text-google' : '/api/extract-text-aws';
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -56,7 +58,8 @@ export default function PDFTextractDemo() {
 
       const data = await response.json();
       setExtractedText(data.text);
-      setProcessor(data.processor || (ocrMethod === 'mistral' ? 'Mistral OCR' : 'AWS Textract'));
+      setProcessor(data.processor || (ocrMethod === 'mistral' ? 'Mistral OCR' : 
+                                    ocrMethod === 'google' ? 'Google Document AI' : 'AWS Textract'));
       
       // Store Mistral file info if using Mistral OCR
       if (ocrMethod === 'mistral' && data.fileInfo) {
@@ -66,12 +69,13 @@ export default function PDFTextractDemo() {
         });
       }
       
-      // Store structured data if using AWS Textract
-      if (ocrMethod === 'textract' && (data.keyValuePairs || data.formFields || data.tables)) {
+      // Store structured data if using AWS Textract or Google Document AI
+      if ((ocrMethod === 'textract' || ocrMethod === 'google') && (data.keyValuePairs || data.formFields || data.tables || data.entities)) {
         setStructuredData({
           keyValuePairs: data.keyValuePairs || [],
           formFields: data.formFields || [],
           tables: data.tables || [],
+          entities: data.entities || [], // Google Document AI specific
           totalPages: data.totalPages || 1
         });
       }
@@ -87,7 +91,7 @@ export default function PDFTextractDemo() {
     if (!question.trim()) return;
     
     // Check requirements based on Q&A method
-    if (qaMethod === 'anthropic' && !extractedText) return;
+    if ((qaMethod === 'anthropic' || qaMethod === 'google') && !extractedText) return;
     if (qaMethod === 'mistral' && !mistralFileInfo) return;
 
     setIsAnswering(true);
@@ -121,6 +125,28 @@ export default function PDFTextractDemo() {
         const data = await response.json();
         setAnswer(data.answer);
         setAnswerMethod(data.method || 'mistral-direct');
+      } else if (qaMethod === 'google') {
+        // Use Google Gemini with extracted text and structured data
+        const response = await fetch('/api/ask-question-google', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            question,
+            extractedText,
+            structuredData
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to get answer from Google Gemini');
+        }
+
+        const data = await response.json();
+        setAnswer(data.answer);
+        setAnswerMethod(data.method || 'google-gemini');
       } else {
         // Use Anthropic with extracted text and structured data
         const response = await fetch('/api/ask-question-anthropic', {
@@ -171,50 +197,75 @@ export default function PDFTextractDemo() {
           OCR Document Processing Demo
         </h1>
 
-        {/* OCR Method Selection */}
-        <div className="mb-6 bg-gray-800 rounded-lg p-6">
-          <h2 className="text-xl font-semibold text-white mb-4">Choose OCR Method</h2>
-          <div className="flex space-x-4">
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="radio"
-                name="ocrMethod"
-                value="textract"
-                checked={ocrMethod === 'textract'}
-                onChange={(e) => setOcrMethod(e.target.value as 'textract' | 'mistral')}
-                className="text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-white">AWS Textract</span>
-              <span className="text-gray-400 text-sm">(PDF only, 10MB limit)</span>
-            </label>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="radio"
-                name="ocrMethod"
-                value="mistral"
-                checked={ocrMethod === 'mistral'}
-                onChange={(e) => setOcrMethod(e.target.value as 'textract' | 'mistral')}
-                className="text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-white">Mistral OCR</span>
-              <span className="text-gray-400 text-sm">(PDF + Images, 50MB limit)</span>
-            </label>
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Upload Section */}
+          {/* Upload Section with OCR Method Selection */}
           <div className="bg-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">1. Upload Document</h2>
-            <input
+            <h2 className="text-xl font-semibold text-white mb-6">1. Choose OCR Method & Upload Document</h2>
+            
+            {/* OCR Method Selection - Vertical */}
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-white mb-3">OCR Processing Method</h3>
+              <div className="space-y-3">
+                <label className="flex items-start space-x-3 cursor-pointer p-3 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors">
+                  <input
+                    type="radio"
+                    name="ocrMethod"
+                    value="textract"
+                    checked={ocrMethod === 'textract'}
+                    onChange={(e) => setOcrMethod(e.target.value as 'textract' | 'mistral' | 'google')}
+                    className="mt-1 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <div className="text-white font-medium">AWS Textract</div>
+                    <div className="text-gray-400 text-sm">PDF documents only, 10MB size limit</div>
+                  </div>
+                </label>
+                <label className="flex items-start space-x-3 cursor-pointer p-3 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors">
+                  <input
+                    type="radio"
+                    name="ocrMethod"
+                    value="mistral"
+                    checked={ocrMethod === 'mistral'}
+                    onChange={(e) => setOcrMethod(e.target.value as 'textract' | 'mistral' | 'google')}
+                    className="mt-1 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <div className="text-white font-medium">Mistral OCR</div>
+                    <div className="text-gray-400 text-sm">PDF + Images (JPEG, PNG, GIF, WebP), 50MB limit</div>
+                  </div>
+                </label>
+                <label className="flex items-start space-x-3 cursor-pointer p-3 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors">
+                  <input
+                    type="radio"
+                    name="ocrMethod"
+                    value="google"
+                    checked={ocrMethod === 'google'}
+                    onChange={(e) => setOcrMethod(e.target.value as 'textract' | 'mistral' | 'google')}
+                    className="mt-1 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <div className="text-white font-medium">Google Document AI</div>
+                    <div className="text-gray-400 text-sm">PDF + Images (JPEG, PNG, GIF, WebP, TIFF), 20MB limit</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* File Upload */}
+            <div>
+              <h3 className="text-sm font-medium text-white mb-3">Upload File</h3>
+              <input
               type="file"
-              accept={ocrMethod === 'mistral' ? '.pdf,.jpg,.jpeg,.png,.gif,.webp' : '.pdf'}
+              accept={ocrMethod === 'mistral' ? '.pdf,.jpg,.jpeg,.png,.gif,.webp' : 
+                     ocrMethod === 'google' ? '.pdf,.jpg,.jpeg,.png,.gif,.webp,.tiff,.tif' : '.pdf'}
               onChange={handleFileUpload}
               className="block w-full text-sm text-gray-300 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer focus:outline-none"
             />
             <p className="mt-2 text-xs text-gray-500">
               {ocrMethod === 'mistral' 
                 ? 'Accepts: PDF, JPEG, PNG, GIF, WebP (up to 50MB)'
+                : ocrMethod === 'google'
+                ? 'Accepts: PDF, JPEG, PNG, GIF, WebP, TIFF (up to 20MB)'
                 : 'Accepts: PDF only (up to 10MB)'
               }
             </p>
@@ -236,45 +287,84 @@ export default function PDFTextractDemo() {
             {isExtracting && (
               <div className="mt-4 flex items-center text-blue-400">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400 mr-2"></div>
-                Extracting text with {ocrMethod === 'mistral' ? 'Mistral OCR' : 'AWS Textract'}...
+                Extracting text with {ocrMethod === 'mistral' ? 'Mistral OCR' : 
+                                     ocrMethod === 'google' ? 'Google Document AI' : 'AWS Textract'}...
               </div>
             )}
+            </div>
           </div>
 
           {/* Question Section */}
           <div className="bg-gray-800 rounded-lg p-6">
             <h2 className="text-xl font-semibold text-white mb-4">2. Ask Questions</h2>
             
-            {/* Q&A Method Selection */}
+            {/* Q&A Method Selection - Vertical */}
             <div className="mb-4">
-              <h3 className="text-sm font-medium text-white mb-2">Choose Q&A Method</h3>
-              <div className="flex space-x-4">
-                <label className="flex items-center space-x-2 cursor-pointer">
+              <h3 className="text-sm font-medium text-white mb-3">Choose Q&A Method</h3>
+              <div className="space-y-3">
+                <label className={`flex items-start space-x-3 cursor-pointer p-3 rounded-lg border transition-colors ${
+                  qaMethod === 'anthropic' 
+                    ? 'border-blue-500 bg-blue-900/20' 
+                    : 'border-gray-600 hover:border-gray-500'
+                }`}>
                   <input
                     type="radio"
                     name="qaMethod"
                     value="anthropic"
                     checked={qaMethod === 'anthropic'}
-                    onChange={(e) => setQaMethod(e.target.value as 'anthropic' | 'mistral')}
-                    className="text-blue-600 focus:ring-blue-500"
+                    onChange={(e) => setQaMethod(e.target.value as 'anthropic' | 'mistral' | 'google')}
+                    className="mt-1 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="text-white text-sm">Anthropic</span>
-                  <span className="text-gray-400 text-xs">(over parsed text)</span>
+                  <div className="flex-1">
+                    <div className="text-white font-medium">Anthropic</div>
+                    <div className="text-gray-400 text-sm">Question answering over parsed text and structured data</div>
+                  </div>
                 </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
+                <label className={`flex items-start space-x-3 cursor-pointer p-3 rounded-lg border transition-colors ${
+                  ocrMethod === 'textract' 
+                    ? 'border-gray-700 bg-gray-800/50 cursor-not-allowed' 
+                    : qaMethod === 'mistral' 
+                      ? 'border-blue-500 bg-blue-900/20' 
+                      : 'border-gray-600 hover:border-gray-500'
+                }`}>
                   <input
                     type="radio"
                     name="qaMethod"
                     value="mistral"
                     checked={qaMethod === 'mistral'}
-                    onChange={(e) => setQaMethod(e.target.value as 'anthropic' | 'mistral')}
-                    className="text-blue-600 focus:ring-blue-500"
+                    onChange={(e) => setQaMethod(e.target.value as 'anthropic' | 'mistral' | 'google')}
+                    className="mt-1 text-blue-600 focus:ring-blue-500"
                     disabled={ocrMethod === 'textract'}
                   />
-                  <span className={`text-sm ${ocrMethod === 'textract' ? 'text-gray-500' : 'text-white'}`}>Mistral</span>
-                  <span className="text-gray-400 text-xs">
-                    {ocrMethod === 'textract' ? '(only available with Mistral OCR)' : '(direct document Q&A)'}
-                  </span>
+                  <div className="flex-1">
+                    <div className={`font-medium ${ocrMethod === 'textract' ? 'text-gray-500' : 'text-white'}`}>Mistral</div>
+                    <div className="text-gray-400 text-sm">
+                      {ocrMethod === 'textract' ? 'Only available with Mistral OCR parsing' : 'Direct document Q&A with uploaded file'}
+                    </div>
+                  </div>
+                </label>
+                <label className={`flex items-start space-x-3 cursor-pointer p-3 rounded-lg border transition-colors ${
+                  ocrMethod === 'mistral' 
+                    ? 'border-gray-700 bg-gray-800/50 cursor-not-allowed' 
+                    : qaMethod === 'google' 
+                      ? 'border-blue-500 bg-blue-900/20' 
+                      : 'border-gray-600 hover:border-gray-500'
+                }`}>
+                  <input
+                    type="radio"
+                    name="qaMethod"
+                    value="google"
+                    checked={qaMethod === 'google'}
+                    onChange={(e) => setQaMethod(e.target.value as 'anthropic' | 'mistral' | 'google')}
+                    className="mt-1 text-blue-600 focus:ring-blue-500"
+                    disabled={ocrMethod === 'mistral'}
+                  />
+                  <div className="flex-1">
+                    <div className={`font-medium ${ocrMethod === 'mistral' ? 'text-gray-500' : 'text-white'}`}>Google Gemini</div>
+                    <div className="text-gray-400 text-sm">
+                      {ocrMethod === 'mistral' ? 'Only available with Textract/Google parsing' : 'Question answering over parsed text and structured data'}
+                    </div>
+                  </div>
                 </label>
               </div>
             </div>
@@ -285,14 +375,14 @@ export default function PDFTextractDemo() {
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="Enter your question about the document content..."
                 className="w-full h-24 p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={qaMethod === 'anthropic' ? !extractedText : !mistralFileInfo}
+                disabled={(qaMethod === 'anthropic' || qaMethod === 'google') ? !extractedText : !mistralFileInfo}
               />
               <button
                 onClick={handleAskQuestion}
-                disabled={!question.trim() || isAnswering || (qaMethod === 'anthropic' ? !extractedText : !mistralFileInfo)}
+                disabled={!question.trim() || isAnswering || ((qaMethod === 'anthropic' || qaMethod === 'google') ? !extractedText : !mistralFileInfo)}
                 className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isAnswering ? "Getting Answer..." : `Ask Question (${qaMethod === 'anthropic' ? 'Anthropic' : 'Mistral'})`}
+                {isAnswering ? "Getting Answer..." : `Ask Question (${qaMethod === 'anthropic' ? 'Anthropic' : qaMethod === 'google' ? 'Google Gemini' : 'Mistral'})`}
               </button>
             </div>
           </div>
@@ -341,7 +431,19 @@ export default function PDFTextractDemo() {
                   📊 Tables ({structuredData.tables.length})
                 </button>
               )}
-              
+
+              {structuredData?.entities && structuredData.entities.length > 0 && (
+                <button
+                  onClick={() => setActiveTab('entities')}
+                  className={`px-4 py-2 rounded-t-lg font-medium transition-colors duration-200 ${
+                    activeTab === 'entities'
+                      ? 'bg-orange-600 text-white border-b-2 border-orange-400'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                  }`}
+                >
+                  🏷️ Entities ({structuredData.entities.length})
+                </button>
+              )}
               
               {structuredData && (
                 <button
@@ -466,12 +568,44 @@ export default function PDFTextractDemo() {
                 </div>
               )}
 
+              {/* Entities Tab */}
+              {activeTab === 'entities' && structuredData?.entities && (
+                <div>
+                  <h3 className="text-lg font-medium text-white mb-4">
+                    Extracted Entities ({structuredData.entities.length} entities)
+                  </h3>
+                  <div className="bg-gray-700 rounded-lg p-6 h-96 overflow-y-auto space-y-4">
+                    {structuredData.entities.map((entity, index) => (
+                      <div key={index} className="bg-gray-600 rounded-lg p-4 border-l-4 border-orange-500">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <div className="text-xs text-gray-400 mb-2 font-medium">TYPE</div>
+                            <div className="text-orange-300 font-medium text-base break-words">
+                              {entity.type || 'Unknown'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-400 mb-2 font-medium">MENTION</div>
+                            <div className="text-yellow-300 text-base break-words">
+                              {entity.mentionText || 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-500 text-xs text-gray-400">
+                          <span>Page {entity.pageNumber}</span>
+                          <span>{Math.round(entity.confidence * 100)}% confidence</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Summary Tab */}
               {activeTab === 'summary' && structuredData && (
                 <div>
                   <h3 className="text-lg font-medium text-white mb-6">Extraction Summary</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="bg-gray-700 rounded-lg p-6 text-center border-l-4 border-blue-500">
                       <div className="text-3xl font-bold text-white mb-2">{structuredData.totalPages}</div>
                       <div className="text-gray-400 font-medium">Total Pages</div>
@@ -483,6 +617,10 @@ export default function PDFTextractDemo() {
                     <div className="bg-gray-700 rounded-lg p-6 text-center border-l-4 border-purple-500">
                       <div className="text-3xl font-bold text-purple-400 mb-2">{structuredData.tables?.length || 0}</div>
                       <div className="text-gray-400 font-medium">Tables</div>
+                    </div>
+                    <div className="bg-gray-700 rounded-lg p-6 text-center border-l-4 border-orange-500">
+                      <div className="text-3xl font-bold text-orange-400 mb-2">{structuredData.entities?.length || 0}</div>
+                      <div className="text-gray-400 font-medium">Entities</div>
                     </div>
                   </div>
                   
@@ -514,6 +652,7 @@ export default function PDFTextractDemo() {
                 <span className="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded">
                   {answerMethod === 'mistral-direct' ? 'Mistral Direct Q&A' : 
                    answerMethod === 'anthropic' ? 'Anthropic (over parsed text)' : 
+                   answerMethod === 'google-gemini' ? 'Google Gemini (over parsed text)' :
                    answerMethod}
                 </span>
               )}
